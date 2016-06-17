@@ -9,14 +9,14 @@ import (
 )
 
 var (
-	reviewID    string
-	proxyRawURL = "socks5://127.0.0.1:9150"
+	reviewID, proxy string
 )
 
 func main() {
-	// Parse optional param, 'id' (i.e. review ID)
+	// Parse params
 	flags := flag.NewFlagSet("pitchfork-dl-scrape-review", flag.ExitOnError)
 	flags.StringVar(&reviewID, "id", "", "Review ID")
+	flags.StringVar(&proxy, "proxy", "socks5://127.0.0.1:9150", "Proxy server")
 	err := flags.Parse(os.Args[1:])
 	if err != nil {
 		log.Fatalf("Error parsing flags: %v", err)
@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// Prepare proxy client
-	proxyClient, err := app.GetProxyClient(proxyRawURL)
+	proxyClient, err := app.GetProxyClient(proxy)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}

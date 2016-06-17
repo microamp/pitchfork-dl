@@ -17,7 +17,7 @@ import (
 
 var (
 	maxPageWorkers   = 3  // Number of concurrent page workers
-	maxReviewWorkers = 72 // Number of concurrent reviewer workers
+	maxReviewWorkers = 72 // Number of concurrent review workers
 
 	proxy, output       string
 	pageFirst, pageLast int

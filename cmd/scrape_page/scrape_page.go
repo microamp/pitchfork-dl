@@ -10,21 +10,22 @@ import (
 )
 
 var (
-	pageNumber  int
-	proxyRawURL = "socks5://127.0.0.1:9150"
+	pageNumber int
+	proxy      string
 )
 
 func main() {
-	// Parse optional param, 'page'
+	// Parse params
 	flags := flag.NewFlagSet("pitchfork-dl-scrape-page", flag.ExitOnError)
 	flags.IntVar(&pageNumber, "page", 1, "Page number")
+	flags.StringVar(&proxy, "proxy", "socks5://127.0.0.1:9150", "Proxy server")
 	err := flags.Parse(os.Args[1:])
 	if err != nil {
 		log.Fatalf("Error parsing flags: %v", err)
 	}
 
 	// Prepare proxy client
-	proxyClient, err := app.GetProxyClient(proxyRawURL)
+	proxyClient, err := app.GetProxyClient(proxy)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
