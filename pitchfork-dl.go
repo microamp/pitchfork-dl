@@ -52,7 +52,7 @@ func startPageWorker(scraper *app.Scraper, chanPages <-chan int, chanReviewIDs c
 			if resp.StatusCode == http.StatusNotFound {
 				log.Printf("Page %d not found", pageNumber)
 				chanDone <- true
-				continue
+				break
 			}
 
 			reviewIDs, err := app.ParsePage(pageNumber, resp)
