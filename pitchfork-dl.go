@@ -11,13 +11,17 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	app "github.com/microamp/pitchfork-dl/app"
 )
 
 var (
-	maxPageWorkers   = 3  // Number of concurrent page workers
-	maxReviewWorkers = 72 // Number of concurrent review workers
+	maxPageWorkers   = 2  // Number of concurrent page workers
+	maxReviewWorkers = 48 // Number of concurrent review workers
+
+	retryDelayPage   = 5 * time.Second
+	retryDelayReview = 3 * time.Second
 
 	proxy, output       string
 	pageFirst, pageLast int
@@ -40,26 +44,36 @@ func startPageWorker(scraper *app.Scraper, chanPages <-chan int, chanReviewIDs c
 			break // Termination due to channel closed
 		}
 
-		_, resp, err := scraper.ScrapePage(pageNumber)
-		if err != nil {
-			log.Fatalf("Error while scraping page, %d: %s", pageNumber, err)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			log.Printf("Page %d not found", pageNumber)
-			chanDone <- true
-			continue
-		}
+		for {
+			_, resp, err := scraper.ScrapePage(pageNumber)
+			if err != nil {
+				log.Fatalf("Error while scraping page, %d: %s", pageNumber, err)
+			}
+			if resp.StatusCode == http.StatusNotFound {
+				log.Printf("Page %d not found", pageNumber)
+				chanDone <- true
+				continue
+			}
 
-		reviewIDs, err := app.ParsePage(pageNumber, resp)
-		if err != nil {
-			log.Fatalf("Error while parsing page, %d: %s", pageNumber, err)
-		}
+			reviewIDs, err := app.ParsePage(pageNumber, resp)
+			if err != nil {
+				log.Fatalf("Error while parsing page, %d: %s", pageNumber, err)
+			}
 
-		// Log page info
-		go log.Printf("Page %d with %d reviews", pageNumber, len(reviewIDs))
+			if len(reviewIDs) == 0 {
+				// Retry if no data
+				log.Printf("Empty data received. Retrying page %d after %d seconds...", pageNumber, retryDelayPage/time.Second)
+				time.Sleep(retryDelayPage)
+				continue
+			} else {
+				// Log page info
+				go log.Printf("Page %d with %d reviews", pageNumber, len(reviewIDs))
+			}
 
-		for _, reviewID := range reviewIDs {
-			chanReviewIDs <- reviewID
+			for _, reviewID := range reviewIDs {
+				chanReviewIDs <- reviewID
+			}
+			break
 		}
 	}
 }
@@ -73,28 +87,38 @@ func startReviewWorker(scraper *app.Scraper, chanReviewIDs <-chan string, wg *sy
 			break // Termination due to channel closed
 		}
 
-		_, resp, err := scraper.ScrapeReview(reviewID)
-		if err != nil {
-			log.Fatalf("Error while scraping review, %s: %s", reviewID, err)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			log.Printf("Review not found: %s", reviewID)
+		for {
+			_, resp, err := scraper.ScrapeReview(reviewID)
+			if err != nil {
+				log.Fatalf("Error while scraping review, %s: %s", reviewID, err)
+			}
+			if resp.StatusCode == http.StatusNotFound {
+				log.Printf("Review not found: %s", reviewID)
+				break
+			}
+
+			review, err := app.ParseReview(reviewID, resp)
+			if err != nil {
+				log.Fatalf("Error while parsing review, %s: %s", reviewID, err)
+			}
+
+			if len(review.Albums) == 0 {
+				// Retry if no data
+				log.Printf("Empty data received. Retrying review %s after %d seconds...", reviewID, retryDelayReview/time.Second)
+				time.Sleep(retryDelayReview)
+				continue
+			} else {
+				// Log review info
+				go review.PrintInfo()
+			}
+
+			// Write to file (JSON)
+			filename := fmt.Sprintf("%s/%s.json", scraper.OutputDirectory, reviewID)
+			err = writeToFile(filename, review)
+			if err != nil {
+				log.Fatalf("Error while writing to file, %s: %s", filename, err)
+			}
 			break
-		}
-
-		review, err := app.ParseReview(reviewID, resp)
-		if err != nil {
-			log.Fatalf("Error while parsing review, %s: %s", reviewID, err)
-		}
-
-		// Log review info
-		go review.PrintInfo()
-
-		// Write to file (JSON)
-		filename := fmt.Sprintf("%s/%s.json", scraper.OutputDirectory, reviewID)
-		err = writeToFile(filename, review)
-		if err != nil {
-			log.Fatalf("Error while writing to file, %s: %s", filename, err)
 		}
 	}
 }
