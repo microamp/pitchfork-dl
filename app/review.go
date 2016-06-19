@@ -14,7 +14,7 @@ type Review struct {
 	Albums   []*Album `json:"albums"`
 	Authors  []string `json:"authors"`
 	Genres   []string `json:"genres"`
-	Article  string
+	Article  string   `json:"article"`
 }
 
 // Album ...
