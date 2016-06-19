@@ -60,15 +60,16 @@ func startPageWorker(scraper *app.Scraper, chanPages <-chan int, chanReviewIDs c
 				log.Fatalf("Error while parsing page, %d: %s", pageNumber, err)
 			}
 
-			if len(reviewIDs) == 0 {
+			noOfReviewIDs := len(reviewIDs)
+			if noOfReviewIDs == 0 {
 				// Retry if no data
 				log.Printf("Empty data received. Retrying page %d after %d seconds...", pageNumber, retryDelayPage/time.Second)
 				time.Sleep(retryDelayPage)
 				continue
-			} else {
-				// Log page info
-				go log.Printf("Page %d with %d reviews", pageNumber, len(reviewIDs))
 			}
+
+			// Log page info
+			go log.Printf("Page %d with %d reviews", pageNumber, noOfReviewIDs)
 
 			for _, reviewID := range reviewIDs {
 				chanReviewIDs <- reviewID
@@ -107,10 +108,10 @@ func startReviewWorker(scraper *app.Scraper, chanReviewIDs <-chan string, wg *sy
 				log.Printf("Empty data received. Retrying review %s after %d seconds...", reviewID, retryDelayReview/time.Second)
 				time.Sleep(retryDelayReview)
 				continue
-			} else {
-				// Log review info
-				go review.PrintInfo()
 			}
+
+			// Log review info
+			go review.PrintInfo()
 
 			// Write to file (JSON)
 			filename := fmt.Sprintf("%s/%s.json", scraper.OutputDirectory, reviewID)
