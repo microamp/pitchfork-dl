@@ -6,7 +6,7 @@ Download all [Pitchfork](http://pitchfork.com/reviews/albums/) album reviews in 
 
 [![asciicast](https://asciinema.org/a/8d9aynoywjmlkew7879pkcv81.png)](https://asciinema.org/a/8d9aynoywjmlkew7879pkcv81)
 
-### Dependencies
+## Dependencies
 ```
 go get -u github.com/PuerkitoBio/goquery
 ```
