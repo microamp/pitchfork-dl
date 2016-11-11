@@ -13,6 +13,7 @@ go get -u github.com/microamp/pitchfork-dl
 
 ## Usage
 ```
+go build pitchfork-dl.go
 pitchfork-dl -h
 ```
 ```
@@ -28,10 +29,6 @@ Usage of pitchfork-dl:
 ```
 
 ## Quickstart
-
-```bash
-go build pitchfork-dl.go
-```
 
 ### Reviews in first 10 pages
 ```
