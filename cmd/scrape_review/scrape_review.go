@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// Prepare proxy client
-	proxyClient, err := app.GetProxyClient(proxy)
+	proxyClient, err := app.GetClient(proxy)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}

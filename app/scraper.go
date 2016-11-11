@@ -76,8 +76,8 @@ func ParseReview(reviewID string, resp *http.Response) (*Review, error) {
 	return review, nil
 }
 
-// GetProxyClient gets a proxy client
-func GetProxyClient(rawURL string) (*http.Client, error) {
+// GetClient builds a HTTP client
+func GetClient(rawURL string) (*http.Client, error) {
 	proxyURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err

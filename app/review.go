@@ -133,7 +133,7 @@ func (review *Review) setArticle() {
 			)
 		},
 	)
-	review.Article = strings.Join(paragraphs, "\n\n")
+	review.Article = strings.Join(paragraphs, " ")
 }
 
 // PrintInfo ...

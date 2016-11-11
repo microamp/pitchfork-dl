@@ -29,9 +29,13 @@ Usage of pitchfork-dl:
 
 ## Quickstart
 
+```bash
+go build pitchfork-dl.go
+```
+
 ### Reviews in first 10 pages
 ```
-pitchfork-dl -last 10
+pitchfork-dl -first 1 -last 10
 ```
 
 ### Reviews from 50th page to 100th page
@@ -39,14 +43,9 @@ pitchfork-dl -last 10
 pitchfork-dl -first 50 -last 100
 ```
 
-### Reviews from 1000th page till the last page (unknown)
+### All reviews (as of November 2016)
 ```
-pitchfork-dl -first 1000
-```
-
-### All reviews
-```
-pitchfork-dl
+pitchfork-dl -first 1 -last 1521
 ```
 
 ## License

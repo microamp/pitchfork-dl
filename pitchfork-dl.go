@@ -17,11 +17,11 @@ import (
 )
 
 var (
-	maxPageWorkers   = 2  // Number of concurrent page workers
-	maxReviewWorkers = 48 // Number of concurrent review workers
+	maxPageWorkers   = 3  // Number of concurrent page workers
+	maxReviewWorkers = 24 // Number of concurrent review workers
 
-	retryDelayPage   = 5 * time.Second
-	retryDelayReview = 3 * time.Second
+	retryDelayPage   = 30 * time.Second
+	retryDelayReview = 30 * time.Second
 
 	proxy, output       string
 	pageFirst, pageLast int
@@ -35,91 +35,86 @@ func writeToFile(path string, review *app.Review) error {
 	return ioutil.WriteFile(path, bytes, 0644)
 }
 
-func startPageWorker(scraper *app.Scraper, chanPages <-chan int, chanReviewIDs chan<- string, chanDone chan<- bool, wg *sync.WaitGroup) {
+func startPageWorker(scraper *app.Scraper, chanPages <-chan int, chanDone <-chan bool, chanReviewIDs chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
-		pageNumber, ok := <-chanPages
-		if !ok {
-			break // Termination due to channel closed
-		}
-
-		for {
+		select {
+		case <-chanDone:
+			return
+		case pageNumber := <-chanPages:
 			_, resp, err := scraper.ScrapePage(pageNumber)
 			if err != nil {
-				log.Fatalf("Error while scraping page, %d: %s", pageNumber, err)
+				log.Printf("Error while scraping page %d: %+v", pageNumber, err)
+				continue
 			}
-			if resp.StatusCode == http.StatusNotFound {
-				log.Printf("Page %d not found", pageNumber)
-				chanDone <- true
-				break
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Status %d received", resp.StatusCode)
+				continue
 			}
 
 			reviewIDs, err := app.ParsePage(pageNumber, resp)
 			if err != nil {
-				log.Fatalf("Error while parsing page, %d: %s", pageNumber, err)
+				log.Printf("Error while parsing page %d: %+v", pageNumber, err)
+				continue
 			}
 
 			noOfReviewIDs := len(reviewIDs)
 			if noOfReviewIDs == 0 {
-				// Retry if no data
 				log.Printf("Empty data received. Retrying page %d after %d seconds...", pageNumber, retryDelayPage/time.Second)
 				time.Sleep(retryDelayPage)
 				continue
 			}
 
 			// Log page info
-			go log.Printf("Page %d with %d reviews", pageNumber, noOfReviewIDs)
+			log.Printf("Page %d with %d reviews", pageNumber, noOfReviewIDs)
 
 			for _, reviewID := range reviewIDs {
 				chanReviewIDs <- reviewID
 			}
-			break
 		}
 	}
 }
 
-func startReviewWorker(scraper *app.Scraper, chanReviewIDs <-chan string, wg *sync.WaitGroup) {
+func startReviewWorker(scraper *app.Scraper, chanReviewIDs <-chan string, chanDone <-chan bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
-		reviewID, ok := <-chanReviewIDs
-		if !ok {
-			break // Termination due to channel closed
-		}
-
-		for {
+		select {
+		case <-chanDone:
+			return
+		case reviewID := <-chanReviewIDs:
 			_, resp, err := scraper.ScrapeReview(reviewID)
 			if err != nil {
-				log.Fatalf("Error while scraping review, %s: %s", reviewID, err)
+				log.Printf("Error while scraping review %s: %+v", reviewID, err)
+				continue
 			}
-			if resp.StatusCode == http.StatusNotFound {
-				log.Printf("Review not found: %s", reviewID)
-				break
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Status %d received", resp.StatusCode)
+				continue
 			}
 
 			review, err := app.ParseReview(reviewID, resp)
 			if err != nil {
-				log.Fatalf("Error while parsing review, %s: %s", reviewID, err)
+				log.Printf("Error while parsing review %s: %+v", reviewID, err)
+				continue
 			}
 
 			if len(review.Albums) == 0 {
-				// Retry if no data
 				log.Printf("Empty data received. Retrying review %s after %d seconds...", reviewID, retryDelayReview/time.Second)
 				time.Sleep(retryDelayReview)
 				continue
 			}
 
 			// Log review info
-			go review.PrintInfo()
+			review.PrintInfo()
 
-			// Write to file (JSON)
+			// Write to file as JSON
 			filename := fmt.Sprintf("%s/%s.json", scraper.OutputDirectory, reviewID)
 			err = writeToFile(filename, review)
 			if err != nil {
-				log.Fatalf("Error while writing to file, %s: %s", filename, err)
+				log.Printf("Error while writing to file %s: %+v", filename, err)
 			}
-			break
 		}
 	}
 }
@@ -131,9 +126,10 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	signal.Notify(chanSigs, syscall.SIGTERM)
 
 	chanPages := make(chan int)
-	chanReviewIDs := make(chan string)
+	chanReviewIDs := make(chan string, 48) // Buffered: 2 pages (24 reviews per page)
 
-	chanDone := make(chan bool, maxPageWorkers) // Buffered!
+	chanDone1 := make(chan bool)
+	chanDone2 := make(chan bool)
 
 	// Wait groups
 	var wgPages, wgReviewIDs sync.WaitGroup
@@ -143,52 +139,39 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	// Start page workers
 	go func() {
 		for i := 0; i < maxPageWorkers; i++ {
-			go startPageWorker(scraper, chanPages, chanReviewIDs, chanDone, &wgPages)
+			go startPageWorker(scraper, chanPages, chanDone1, chanReviewIDs, &wgPages)
 		}
 	}()
 
 	// Start review workers
 	go func() {
 		for i := 0; i < maxReviewWorkers; i++ {
-			go startReviewWorker(scraper, chanReviewIDs, &wgReviewIDs)
+			go startReviewWorker(scraper, chanReviewIDs, chanDone2, &wgReviewIDs)
 		}
 	}()
 
-	// Detect OS interrupt signals
+	// Create page jobs
 	go func() {
-		for s := range chanSigs {
-			log.Printf("Shutdown signal received (%s)", s)
-			chanDone <- true
-			break
+		for pageNumber := first; pageNumber < last; pageNumber++ {
+			chanPages <- pageNumber
 		}
 	}()
 
-	pageNumber := first
-	for {
-		select {
-		case <-chanDone:
-			log.Println("Waiting for workers to finish...")
-			close(chanPages)
-			wgPages.Wait()
-			close(chanReviewIDs)
-			wgReviewIDs.Wait()
-			os.Exit(1)
-		default:
-			// If last page is unknown, scrape until the end (i.e. 404)
-			if last == 0 {
-				chanPages <- pageNumber
-				pageNumber++
-			} else {
-				if pageNumber <= last {
-					chanPages <- pageNumber
-					pageNumber++
-				} else {
-					log.Println("No more pages to download")
-					chanDone <- true
-				}
-			}
-		}
-	}
+	// Receive OS error signal
+	s := <-chanSigs
+	log.Printf("Signal received (%s). Broadcasting cancellation to all workers...", s)
+
+	// Close channel to broadcast done signals to all page worker goroutines
+	close(chanDone1)
+	log.Printf("Waiting for all page workers to complete...")
+	wgPages.Wait()
+
+	// Close channel to broadcast done signals to all review worker goroutines
+	close(chanDone2)
+	log.Printf("Waiting for all review workers to complete...")
+	wgReviewIDs.Wait()
+
+	log.Printf("Exiting...")
 }
 
 func main() {
@@ -197,28 +180,24 @@ func main() {
 	flags.StringVar(&proxy, "proxy", "socks5://127.0.0.1:9150", "Proxy server")
 	flags.StringVar(&output, "output", "reviews", "Output directory")
 	flags.IntVar(&pageFirst, "first", 1, "First page")
-	flags.IntVar(&pageLast, "last", 0, "Last page")
+	flags.IntVar(&pageLast, "last", 10, "Last page")
 
 	err := flags.Parse(os.Args[1:])
 	if err != nil {
 		log.Fatalf("Error parsing flags: %v", err)
 	}
 
-	if pageLast == 0 {
-		log.Printf("Scraping pages from %d...", pageFirst)
-	} else {
-		log.Printf("Scraping pages from %d to %d...", pageFirst, pageLast)
-	}
+	log.Printf("Scraping pages %d to %d...", pageFirst, pageLast)
 
-	// Prepare proxy client
-	proxyClient, err := app.GetProxyClient(proxy)
+	// Prepare client
+	client, err := app.GetClient(proxy)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
 	// Fire up goroutines and start processing
 	scraper := &app.Scraper{
-		Client:          proxyClient,
+		Client:          client,
 		OutputDirectory: output,
 	}
 	startProcessing(scraper, pageFirst, pageLast)
