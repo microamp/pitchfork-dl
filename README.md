@@ -6,9 +6,9 @@ Download all [Pitchfork](http://pitchfork.com/reviews/albums/) album reviews in 
 
 [![asciicast](https://asciinema.org/a/8d9aynoywjmlkew7879pkcv81.png)](https://asciinema.org/a/8d9aynoywjmlkew7879pkcv81)
 
-## Installation
+### Dependencies
 ```
-go get -u github.com/microamp/pitchfork-dl
+go get -u github.com/PuerkitoBio/goquery
 ```
 
 ## Usage
