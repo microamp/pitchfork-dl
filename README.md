@@ -1,4 +1,4 @@
-# pitchfork-dl
+# pitchfork-dl [![Build Status](https://travis-ci.org/microamp/pitchfork-dl.svg?branch=master)](https://travis-ci.org/microamp/pitchfork-dl)
 
 Download all [Pitchfork](http://pitchfork.com/reviews/albums/) album reviews in JSON format
 
