@@ -152,7 +152,7 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 
 	// Create page jobs
 	go func() {
-		for pageNumber := first; pageNumber < last; pageNumber++ {
+		for pageNumber := first; pageNumber <= last; pageNumber++ {
 			chanPages <- pageNumber
 		}
 	}()
