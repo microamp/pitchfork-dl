@@ -16,13 +16,16 @@ import (
 	app "github.com/microamp/pitchfork-dl/app"
 )
 
-var (
+const (
 	maxPageWorkers   = 3  // Number of concurrent page workers
 	maxReviewWorkers = 12 // Number of concurrent review workers
 
 	retryDelayPage   = 30 * time.Second
 	retryDelayReview = 30 * time.Second
+)
 
+var (
+	reviewIDsToBuffer   = maxPageWorkers*12 - maxReviewWorkers
 	proxy, output       string
 	pageFirst, pageLast int
 )
@@ -126,7 +129,7 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	signal.Notify(chanSigs, syscall.SIGTERM)
 
 	chanPages := make(chan int)
-	chanReviewIDs := make(chan string, 24) // Buffered!
+	chanReviewIDs := make(chan string, reviewIDsToBuffer) // Buffered!
 
 	chanDone1 := make(chan bool)
 	chanDone2 := make(chan bool)
