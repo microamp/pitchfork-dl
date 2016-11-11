@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	maxPageWorkers   = 3  // Number of concurrent page workers
-	maxReviewWorkers = 24 // Number of concurrent review workers
+	maxPageWorkers   = 2  // Number of concurrent page workers
+	maxReviewWorkers = 12 // Number of concurrent review workers
 
 	retryDelayPage   = 30 * time.Second
 	retryDelayReview = 30 * time.Second
@@ -126,7 +126,7 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	signal.Notify(chanSigs, syscall.SIGTERM)
 
 	chanPages := make(chan int)
-	chanReviewIDs := make(chan string, 48) // Buffered: 2 pages (24 reviews per page)
+	chanReviewIDs := make(chan string, 36) // Buffered!
 
 	chanDone1 := make(chan bool)
 	chanDone2 := make(chan bool)
