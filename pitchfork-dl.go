@@ -31,7 +31,8 @@ var (
 )
 
 func writeToFile(path string, review *app.Review) error {
-	bytes, err := json.MarshalIndent(review, "", "  ")
+	//bytes, err := json.MarshalIndent(review, "", "  ")
+	bytes, err := json.Marshal(review) // Single line, no indentation
 	if err != nil {
 		return err
 	}
@@ -140,6 +141,7 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	wgReviewIDs.Add(maxReviewWorkers)
 
 	// Start page workers
+	log.Printf("Starting %d page workers...", maxPageWorkers)
 	go func() {
 		for i := 0; i < maxPageWorkers; i++ {
 			go startPageWorker(scraper, chanPages, chanDone1, chanReviewIDs, &wgPages)
@@ -147,6 +149,7 @@ func startProcessing(scraper *app.Scraper, first, last int) {
 	}()
 
 	// Start review workers
+	log.Printf("Starting %d review workers...", maxReviewWorkers)
 	go func() {
 		for i := 0; i < maxReviewWorkers; i++ {
 			go startReviewWorker(scraper, chanReviewIDs, chanDone2, &wgReviewIDs)
